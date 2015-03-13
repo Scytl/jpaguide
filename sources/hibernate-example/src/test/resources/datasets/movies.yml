@@ -1,0 +1,4 @@
+movie:
+  - id: 1
+    title: The Matrix
+    releasedYear: 1999

@@ -1,0 +1,870 @@
+= What is Java Persistence API (JPA)
+
+The *Java Persistence API* (_JPA_) is a Java specification for accessing, persisting, and managing data between Java objects / classes and a relational database.
+_JPA_ was defined as part of the _EJB 3.0_ specification as a replacement for the *EJB 2 CMP Entity Beans* specification.
+_JPA_ is now considered the standard industry approach for Object to Relational Mapping (_ORM_) in the Java Industry.
+
+_JPA_ itself is just a specification, not a product; it cannot perform persistence or anything else by itself.
+_JPA_ is just a set of interfaces, and requires an implementation.
+There are open-source and commercial _JPA_ implementations to choose from and any Java EE 5 application server should provide support for its use.
+_JPA_ also requires a database to persist to.
+
+_JPA_ allows _POJO_ (Plain Old Java Objects) to be easily persisted without requiring the classes to implement any interfaces or methods as the _EJB 2 CMP_ specification required.
+_JPA_ allows an object's object-relational mappings to be defined through standard annotations or _XML_ defining how the Java class maps to a relational database table.
+_JPA_ also defines a runtime *EntityManager API* for processing queries and transaction on the objects against the database.
+_JPA_ defines an object-level query language, _JPQL_, to allow querying of the objects from the database.
+
+[NOTE]
+====
+With the advent of _NoSQL_ databases, there are some _JPA_ implementation that offers a mapping between _POJOs_ and _NoSQL_ databases using _JPA_ annotations.
+
+One example of them is _Hibernate OGM_ http://hibernate.org/ogm/ .
+You can see a running example at http://blog.eisele.net/2015/01/nosql-with-hibernate-ogm-part-one.html
+====
+
+= Hibernate
+
+== What is Hibernate?
+
+*Hibernate ORM* enables developers to more easily write applications whose data outlives the application process.
+As an Object/Relational Mapping (_ORM_) framework, _Hibernate_ is concerned with data persistence as it applies to relational databases (via _JDBC_).
+
+In addition to its own "native" API, _Hibernate_ is also an implementation of the Java Persistence API (_JPA_) specification.
+As such, it can be easily used in any environment supporting _JPA_ including Java SE applications, Java EE application servers, Enterprise OSGi containers, etc.
+
+== Preparing the Environment
+
+_Hibernate_ can run in standalone applications or Java EE application servers.
+In our example we are going to implement a basic example of how to configure _JPA_, how to write code for dealing with *Entity Managers* and finally how to write tests.
+
+For this example we are going to use _Apache TomEE_ as Java EE server but any other application server or _Spring Framework_ application will require same steps.
+
+.About Apache TomEE
+****
+*Apache TomEE* is a _Java EE_ certified web profile application server.
+We can summarize as *Apache TomEE = Apache Tomcat + Java EE*.
+
+*Apache TomEE* comes with _OpenJPA_ as _JPA_ provider.
+But *Apache TomEE* can work with any _JPA_ provider that follows _JPA2_ specification.
+****
+
+For our examples we are going to use `Apache TomEE 1.7.1` and `Hibernate 4.2.17`.
+
+== First example
+
+The first thing to do is creating an empty _war_ _Maven_ project to create a really simple example of inserting a single entity.
+
+=== Dependencies
+
+Next step is adding `Hibernate 4.2.17` and `Hibernate Validator 4.3.2` as dependency.
+This step is required because we want to use _Hibernate_ instead of _OpenJPA_.
+
+Finally we add the _JavaEE 6_ dependency (which only contains the interfaces) as provided dependency.
+
+[source, xml]
+.pom.xml
+----
+<dependencies>
+  <dependency>
+    <groupId>org.hibernate</groupId>
+    <artifactId>hibernate-core</artifactId>
+    <version>4.2.17.Final</version> <!--1-->
+  </dependency>
+  <dependency>
+    <groupId>org.hibernate</groupId>
+    <artifactId>hibernate-entitymanager</artifactId>
+    <version>4.2.17.Final</version>
+  </dependency>
+  <dependency>
+    <groupId>org.hibernate</groupId>
+    <artifactId>hibernate-validator</artifactId>
+    <version>4.3.2.Final</version> <!--2-->
+  </dependency>
+  <dependency>
+    <groupId>org.apache.openejb</groupId>
+    <artifactId>javaee-api</artifactId>
+    <version>6.0-6</version>
+    <scope>provided</scope> <!--3-->
+  </dependency>
+</dependencies>
+----
+<1> Latest version of Hibernate compliant with JPA2 (Java EE 6) is the 4.2.17.
+<2> Latest version of Hibernate Validator compliant with Bean Validation 1.0 (Java EE 6) is the 4.2.17.
+<3> Provided scope is used because the application server is the responsible of providing the implementation.
+
+=== Configuration files
+
+Any web application can specify the _JPA_ provider it would like to use via the `persistence.xml` configuration file.
+This file can be present at any of the following locations:
+
+* `WEB-INF/persistence.xml` in case of `.war` file.
+* `META-INF/persistence.xml` in any `.jar` located in `WEB-INF/lib` folder.
+
+For our example we are going to create a test `persistence.xml` file which will contain parameters for an embedded inmemory database and during test phase is going to be copied to required location.
+
+[[test-persistence]]
+[source, xml]
+.src/test/resources/test-persistence.xml
+----
+<persistence version="1.0"
+  xmlns="http://java.sun.com/xml/ns/persistence"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://java.sun.com/xml/ns/persistence
+  http://java.sun.com/xml/ns/persistence/persistence_1_0.xsd">
+
+  <persistence-unit name="movie-unit">
+    <provider>org.hibernate.ejb.HibernatePersistence</provider> <!--1-->
+    <jta-data-source>movieDatabase</jta-data-source>
+    <class>com.scytl.hibernate.Movie</class> <!--2-->
+
+    <properties>
+      <property name="hibernate.hbm2ddl.auto" value="create-drop"/> <!--3-->
+    </properties>
+  </persistence-unit>
+</persistence>
+----
+<1> Sets the _Hibernate_ provider.
+<2> Classes that are _Hibernate_ aware should be added here.
+<3> Using the prefix `hibernate`, we can set any _Hibernate_ specific property.
+
+Next thing to do is defining the `jta-data-source` value.
+Normally this configuration is done in some vendor-lock application server configuration file.
+In case of _Apache TomEE_ the datasource configuration may be placed in a file called `tomee.xml` which is located at ``<TOMEE_HOME>/conf`.
+But also can be placed inside the application itself in a file called `resources.xml` placed at `src/webapp/WEB-INF`.
+
+But since _JAVA EE 6_ you can use standard annotations for configuring `DataSource`.
+If the class annotated with these annotations is on classpath, container will automatically configure the datasource defined in them.
+
+For example you can define a class that defines a test datasource by using `@DataSourceDefinition` annotation:
+
+[source, java]
+.src/test/java/com/scytl/hibernate/DataSourceDefinitionConfig.java
+----
+@DataSourceDefinition( //<1>
+  name = "movieDatabase",
+  className = "org.hsqldb.jdbc.JDBCDriver",
+  url = "jdbc:hsqldb:mem:mydb")
+@javax.ejb.Singleton //<2>
+public class DataSourceDefinitionConfig {
+}
+----
+<1> This annotation defines all parameters required to create a _Datasource_. Note that the name of the _datasource_ is the same as set in `jta-data-source` in <<test-persistence ,previous example>>.
+<2> Because we only want an instance of this class in the server class is annotated with `javax.ejb.Singleton`.
+
+=== Model
+
+_JPA_ as it is described in introduction it is an _ORM_ (Object to Relational Mapping).
+So it seems obvious that we may need to indicate in some way how an object will be mapped to a relational database.
+
+In this example we are going to use simple *movie* entity.
+
+[[movie]]
+[source, java]
+./src/main/java/com/scytl/hibernate/Movie.java
+----
+@Entity //<1>
+@NamedQuery(name="Movie.findAll", query="SELECT m FROM Movie m")  //<2>
+public class Movie {
+
+  @Id @GeneratedValue //<3>
+  private long id;
+
+  @NotNull //<4>
+  private String title;
+
+  @Min(1900) //<5>
+  private int releasedYear;
+
+  public void setTitle(String title) {
+    this.title = title;
+  }
+  public String getTitle() {
+    return title;
+  }
+  public void setReleasedYear(int releasedYear) {
+    this.releasedYear = releasedYear;
+  }
+
+  public int getReleasedYear() {
+    return releasedYear;
+  }
+  //equals, hashCode and toString
+----
+<1> `Entity` sets this class as an entity to be managed by _Hibernate_.
+<2> `NamedQuery` sets a query name and the expression of the query.
+<3> Database identifiers are set by using `@Id`. Also if you want to use an autogenerated value you should annotate field with `GeneratedValue` annotation.
+<4> `NotNull` marks a column as not nullable.
+<5> `@Min` ensure that an integer field is at least greater than a specified number.
+
+And finally we need a business class to implement some _CRUD_ operations.
+
+[source, java]
+.src/main/java/com/scytl/MoviesService.java
+----
+@Stateless //<1>
+public class MoviesService {
+
+  @PersistenceContext //<2>
+  EntityManager entityManager;
+
+  public void createMovie(Movie movie) {
+    entityManager.persist(movie);
+  }
+
+  public List<Movie> findAllMovies() {
+    TypedQuery<Movie> findAllMoviesQuery = entityManager.createNamedQuery("Movie.findAll", Movie.class); //<3>
+    return findAllMoviesQuery.getResultList();
+  }
+}
+----
+<1> Creates an _stateless EJB_. Because it is an _EJB_, all operations within each method is transactional by default.
+<2> Sets `EntityManager` instance to start dealing with database operations.
+<3> Executes a named query defined in <<movie, Movie>> class.
+
+=== Testing
+
+Writting unit tests for persistence layer can become a big problem because there are a lot of elements that are controlled or managed by the container.
+For example transactions, creation of `EntityManager` or definition of the datasource.
+So if you try to create _mocks_ for everything you will end up by re-implementing a _JPA_ provider and/or writting a lot of boilerplate code.
+
+If instead of writing a unit test you decide to use an integration test but avoiding using container features such as creation of `EntityManager` or managing transactions you will end up with a test which will look something like:
+
+[source]
+--
+@Before //<1>
+public void preparePersistenceTest() {
+  cleanDatabase();// <2>
+  insertData(); //<3>
+  startTransaction(); //<4>
+}
+
+@Test
+public void persistenceTest() {
+  //<5>
+}
+
+@After
+public void commitTransaction() {
+  commitTransaction(); //<6>
+}
+--
+<1> Before each test we need to execute some operations.
+<2> Clean the database so previous executions finds a clean environment.
+<3> Insert the data required by the test.
+<4> Starts a transaction to bind the test into a transaction.
+<5> Executes the test.
+<6> Finishes the running transaction.
+
+As you may see this is going to be repeated for all tests.
+Moreover the implementation of these operations are far away from simple.
+
+So writing persistence tests could become a problem because:
+
+* You need a container to create the `EntityManager`. If not you are writing a test that is not exactly running in the same environment as in production.
+* You need something to maintain the database isolated between executions (each test should run isolated from the previous execution) and into known state.
+
+And this is exactly what *Arquillian* and *Arquillian Persistence Extension* fix.
+
+.Arquillian
+****
+*Arquillian* is a testing framework that fills the gap between unit tests and integration tests so writting integration tests is as simple as writing a unit test but running within/against an application server.
+
+It deals with all the plumbing of container management, deployment, and framework initialization so you can focus on the task of writing your tests—real tests.
+*Arquillian* minimizes the burden on you by covering aspects surrounding test execution; some of these aspects are as follows:
+
+* Managing the life cycle of the container (start/stop)
+* Bundling the test class with the dependent classes and resources into a deployable archive
+* Enhancing the test class (for example, resolving @Inject, @EJB, and @Resource injections)
+* Deploying the archive to test applications (deploy/undeploy), and capturing results and failures
+
+You can read more about Arquillian in <<ArquillianHome>>.
+
+*Arquillian Persistence Extension* is created to help you writing tests where persistence layer is involved.
+
+It comes with following features:
+
+* Wrapping each test in the separated transaction.
+* Seeding database using:
+* _DBUnit_ with _XML_, _XLS_, _YAML_ and _JSON_ supported as data sets format.
+* Custom _SQL_ scripts.
+* Comparing database state at the end of the test using given data sets (with column exclusion).
+****
+
+So let's start by adding _Arquillian_ dependencies.
+
+==== Arquillian dependencies and configuration
+
+[[arquillian-pom]]
+[source, xml]
+.pom.xml
+----
+<dependencyManagement>
+  <dependencies>
+    <dependency> <!--1-->
+      <groupId>org.jboss.arquillian</groupId>
+      <artifactId>arquillian-bom</artifactId>
+      <version>1.1.7.Final</version>
+      <scope>import</scope>
+      <type>pom</type>
+    </dependency>
+  </dependencies>
+</dependencyManagement>
+
+<dependencies>
+  <dependency>
+    <groupId>org.apache.openejb</groupId>
+    <artifactId>arquillian-tomee-embedded</artifactId> <!--2-->
+    <version>1.7.1</version>
+    <scope>test</scope>
+  </dependency>
+  <dependency>
+    <groupId>org.jboss.arquillian.protocol</groupId>
+    <artifactId>arquillian-protocol-servlet</artifactId>
+    <scope>test</scope>
+  </dependency>
+
+  <dependency>
+    <groupId>org.jboss.arquillian.junit</groupId> <!--3-->
+    <artifactId>arquillian-junit-container</artifactId>
+    <scope>test</scope>
+  </dependency>
+  <dependency>
+    <groupId>org.jboss.arquillian.extension</groupId> <!--4-->
+    <artifactId>arquillian-persistence-dbunit</artifactId>
+    <version>1.0.0.Alpha7</version>
+    <scope>test</scope>
+  </dependency>
+
+  <dependency>
+    <groupId>org.jboss.shrinkwrap.resolver</groupId>
+    <artifactId>shrinkwrap-resolver-depchain</artifactId> <!--5-->
+    <scope>test</scope>
+    <type>pom</type>
+  </dependency>
+
+</dependencies>
+----
+<1> Adds _Arquillian_ `bom` file. This makes that all component added as dependency will contain exactly the same version.
+<2> Because we are using _Apache TomEE_, this dependency adds _Apache TomEE_ as container to be managed by Arquillian.
+<3> _Arquillian_ dependency to use it with _JUnit_.
+<4> _Arquillian Persistence_ dependency.
+<5> _Shrinkwrap_ dependency to be able to resolve artifacts from _Maven_.
+
+Next step is creating an `arquillian.xml` file for configuring *Arquillian*.
+In our case we are going to configure one minor parameter but in this file is where you can configure a lot of custom parameters for different kind of tests like functional tests or system tests.
+
+[source, xml]
+.src/test/resources/arquillian.xml
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<arquillian xmlns="http://jboss.org/schema/arquillian"
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+xsi:schemaLocation="http://jboss.org/schema/arquillian http://jboss.org/schema/arquillian/arquillian_1_0.xsd">
+  <defaultProtocol type="Servlet 3.0"></defaultProtocol>
+</arquillian>
+----
+
+==== Arquillian Test
+
+Let's see how an Arquillian test looks like:
+
+[source, java]
+----
+@RunWith(Arquillian.class) //<1>
+public class MoviesServiceTest {
+
+  @Deployment //<2>
+  public static JavaArchive createDeploymentPackage() {
+    return createDeploymentFile();
+  }
+
+  @EJB //<3>
+  MoviesService moviesService;
+
+  @Test
+  public void shouldCreateMovies() {
+    //<4>
+  }
+}
+----
+<1> Test must use `Arquillian` runner.
+<2> _Arquillian_ needs to know what to deploy on the started container. Deployment file is created in an `static` method annotated with `Deployment`.
+<3> By default _Arquillian_ runs tests inside the container so we can use any _Java EE_ anotation available inside the container. In this case `javax.ejb.EJB`.
+<4> The test itself using the _EJB_ or whatever we want.
+
+As you may see the test looks pretty similar to a unit test, a lot of details about application server or some aspects on how is started and stopped the application server are hidden to the developers.
+So what is happening under the covers when previous test is executed?
+
+[ditaa]
+.Arquillian Lifecycle
+....
++-------------+                           /-------------\
+|    IDE      |                           |    TomEE    |
++-------------+                           \-------------/
+      :                                          :
+      |         +----------------------+         |
+      |---------| Start Embedded TomEE |-------->|
+      |         +----------------------+         |
+      |                                          |
+      |         +-----------------+              |
+      |-------->| Call @Deployment|              |
+      |         +-----------------+              |
+      |                 |                        |
+      |<----------------+                        |
+      |                                          |
+      |       +-----------------------+          |
+      |-------| Deploy Archive + Test |--------->|
+      |       +-----------------------+          |
+      |                                          |
+      |                               +-----------------------+
+      |<------------------------------|    Run and Collect    |
+      |                               +-----------------------+
+      |                                          |
+      |       +-----------------------+          |
+      |-------|   UnDeploy Archives   |--------->|
+      |       +-----------------------+          |
+      |                                          |
+      |       +-----------------------+          |
+      |------ | Stop Embedded TomEE   |--------->|
+      |       +-----------------------+          |
+      |                                          |
+....
+
+First of all _Arquillian_ starts an embedded _Apache TomEE_ (we have defined this in <<arquillian-pom, pom.xml>> in section 2).
+Then a method annotated with `Deployment` annotation is called and returns a `JavaArchive` to be deployed.
+
+After that the generated deployment file and the test itself is packaged and deployed to _Apache TomEE_.
+The test is run inside the container and the results are sent back to IDE.
+Note that this step is required because tests are run inside the container, and the result should be notified to the caller (surefire plugin, IDE, ...).
+
+And finally if there is no more tests to execute container is cleaned from deployed artifacts and _Apache TomEE_ is stopped.
+
+And how should looks like a `@Deployment` annotated method?
+To create a deployment file you need to use a project called `Shrinkwrap`.
+_Arquillian_ has already this project as dependency so you don't need to worry about including it manually in `pom.xml`.
+
+[source, java]
+----
+@Deployment
+public static WebArchive createDeploymentPackage() {
+  WebArchive deploymentFile = ShrinkWrap.create(WebArchive.class) //<1>
+              .addPackage("com.scytl.hibernate") //<2>
+              .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml") //<3>
+              .addAsWebInfResource("test-persistence.xml", "persistence.xml") //<4>
+              .addAsLibraries(getHibernateDependencies()); //<5>
+  return deploymentFile;
+}
+
+private static JavaArchive[][] getHibernateDependencies() {
+
+  JavaArchive[][] dependencies = new JavaArchive[3][];
+
+  PomEquippedResolveStage maven = Maven.resolver().loadPomFromFile("pom.xml"); //<6>
+
+  JavaArchive[] hibernateDependencies = maven.resolve("org.hibernate:hibernate-core").withTransitivity().as(JavaArchive.class); //<7>
+  dependencies[0] = hibernateDependencies;
+
+  JavaArchive[] validatorDependencies = maven.resolve("org.hibernate:hibernate-validator").withTransitivity().as(JavaArchive.class);
+  dependencies[1] = validatorDependencies;
+
+  JavaArchive[] entityManagerDependencies = maven.resolve("org.hibernate:hibernate-entitymanager").withTransitivity().as(JavaArchive.class);
+  dependencies[2] = entityManagerDependencies;
+
+  return dependencies;
+}
+----
+<1> Creates a `war` file in memory. You could create an `ear` or `jar` file as well.
+<2> Adds inside the `war` file all classes under the package `com.scytl.hibernate`. That is inside a virtual directory called `WEB-INF/classes` as `war` spec suggests.
+<3> Adds an empty file called `beans.xml` as `WEB-INF` resource. That is in `WEB-INF` directory.
+<4> Takes the `test-persistence.xml` file defined at <<test-persistence, test-persistence.xml>> renames it to `persistence.xml` and add it as `WEB-INF` resource.
+<5> Because we are using _Hibernate_ on _Apache TomEE_ we need to add it (with all depenedncies) inside `war`. Concretely they will be added in `WEB-INF/lib` virtual directory.
+<6> Dependencies are resolved by using _Maven Shrikwrap_ resolver.
+<7> We resolve artifacts by using _Maven_ coordinates.
+
+And with this virtual object file _Arquillian_ manages itself to deploy it to container.
+
+So arrived at this point we have fixed one of the problems, that is executing code in a similar environment as production ones (inside the application server).
+But we will have the problem of boilerplate code because of a persistence test.
+So lets start applying some _Arquillian Persistence Extension_ sugar.
+
+Note that the test is pretty exactly the same as shown before, the only difference is that we are adding an annotation.
+
+[[APE-persistence-test]]
+[source, java]
+.src/test/java/com/scytl/hibernate/MoviesServiceTest.java
+----
+@RunWith(Arquillian.class)
+public class MoviesServiceTest {
+
+  @Deployment
+  public static WebArchive createDeploymentPackage() {
+    WebArchive deploymentFile = ShrinkWrap.create(WebArchive.class)
+                .addPackage("com.scytl.hibernate")
+                .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml")
+                .addAsWebInfResource("test-persistence.xml", "persistence.xml")
+                .addAsLibraries(getHibernateDependencies());
+    return deploymentFile;
+  }
+
+  private static JavaArchive[][] getHibernateDependencies() {
+
+    JavaArchive[][] dependencies = new JavaArchive[3][];
+
+    PomEquippedResolveStage maven = Maven.resolver().loadPomFromFile("pom.xml");
+
+    JavaArchive[] hibernateDependencies = maven.resolve("org.hibernate:hibernate-core").withTransitivity().as(JavaArchive.class);
+    dependencies[0] = hibernateDependencies;
+
+    JavaArchive[] validatorDependencies = maven.resolve("org.hibernate:hibernate-validator").withTransitivity().as(JavaArchive.class);
+    dependencies[1] = validatorDependencies;
+
+    JavaArchive[] entityManagerDependencies = maven.resolve("org.hibernate:hibernate-entitymanager").withTransitivity().as(JavaArchive.class);
+    dependencies[2] = entityManagerDependencies;
+
+    return dependencies;
+  }
+
+  @EJB
+  MoviesService moviesService;
+
+  @Test
+  @UsingDataSet("datasets/movies.yml") //<1>
+  public void shouldFindAllMovies() {
+    Movie expectedMovie = new Movie();
+    expectedMovie.setTitle("The Matrix");
+    expectedMovie.setReleasedYear(1999);
+
+    List<Movie> movies = moviesService.findAllMovies();
+    assertThat(movies, hasItem(expectedMovie));
+  }
+
+  @Test
+  @ShouldMatchDataSet("datasets/expected-movies.yml") //<2>
+  public void shouldCreateMovies() {
+    Movie theMatrix = new Movie();
+    theMatrix.setTitle("The Matrix");
+    theMatrix.setReleasedYear(1999);
+
+    moviesService.createMovie(theMatrix);
+
+    Movie theMatrixReloaded = new Movie();
+    theMatrixReloaded.setTitle("The Matrix Reloaded");
+    theMatrixReloaded.setReleasedYear(2003);
+
+    moviesService.createMovie(theMatrixReloaded);
+  }
+}
+----
+<1> Arquillian Persistence seeds database with configured content file (`movies.yml`) using `@UsingDataSet`.
+<2> Desired state can be checked before finishing the test using `@ShouldMatchDataSet`.
+
+As you may notice one test method comes with a file (`movies.yml`) that are used to populate the database before executing it so from the point of view of test the database that is going to use is into known state.
+This file looks like:
+
+[source, yml]
+.src/test/resources/datasets/movies.yml
+----
+movie: #<1>
+  - id: 1 #<2>
+    title: The Matrix
+    releasedYear: 1999
+----
+<1> Name of the table.
+<2> Column names of the table and its value.
+
+If you run `shouldFindAllMovies` test defined in <<APE-persistence-test, test>> you can expect that the list will contain one element with `title` field set to `The Matrix`.
+
+But you can assert that after the test, the database is into the expected state by using `@ShouldMatchDataSet`.
+
+[source, yml]
+.src/test/resources/datasets/expected-movies.yml
+----
+movie:
+  - title: The Matrix
+    releasedYear: 1999
+  - title: The Matrix Reloaded
+    releasedYear: 2003
+----
+
+If you run `shouldCreateMovies` test defined in <<APE-persistence-test, test>> you may expected that after the test two movies were inserted into database.
+
+_Arquillian Persistence Extension_ adds some new elements to _Arquillian_ lifescycle.
+
+[ditaa]
+.Arquillian Persistence Extension Lifecycle
+....
++-------------+                           /-------------\                  +-------------+
+|    IDE      |                           |    TomEE    |                  |{s}  DB      |
++-------------+                           \-------------/                  +-------------+
+      :                                          :                                :
+      |         +----------------------+         |                                |
+      |---------| Start Embedded TomEE |-------->|                                |
+      |         +----------------------+         |                                |
+      |                                          |                                |
+      |         +-----------------+              |                                |
+      |-------->| Call @Deployment|              |                                |
+      |         +-----------------+              |                                |
+      |                 |                        |                                |
+      |<----------------+                        |                                |
+      |                                          |                                |
+      |       +-----------------------+          |                                |
+      |-------| Deploy Archive + Test |--------->|                                |
+      |       +-----------------------+          |                                |
+      |                                          |                                |
+      |                                        +-----------------------------------------+
+      |                                        |   cBLU Arquillian Persistence    :      |
+      |                                        |                +--------------------+   |
+      |                                        |                |                 |  |   |
+      |                                        |                v                 |  |   |
+      |                                        |      +--------------------+      |  |   |
+      |                                        |------| Starts Transaction |--->  |  |   |
+      |                                        |      +--------------------+      |  |   |
+      |                                        |                                  |  |   |
+      |                                        |      +--------------------+      |  |   |
+      |                                        |------| Cleans and Insert  |--->  |  |   |
+      |                                        |      +--------------------+      |  |   |
+      |                                        |                                  |  |   |
+      |                                        |      +--------------------+      |  |   |
+      |                                        |------|    Run test        |----->|  |   |
+      |                                        |      +--------------------+      |  |   |
+      |                                        |                                  |  |   |
+      |                                        |      +--------------------+      |  |   |
+      |                                        |------|     Commit         |----->|  |   |
+      |                                        |      +--------------------+      |  |   |
+      |                                        |                                  |  |   |
+      |                                        |      +--------------------+      |  |   |
+      |                                        |------|  Check Expected    |----->|  |   |
+      |                                        |      +--------------------+      |  |   |
+      |                                        |               |                  |  |   |
+      |                                        |               +---------------------+   |
+      |<---------------------------------------|                                  |      |
+      |                                        +-----------------------------------------+
+      |       +-----------------------+          :
+      |<------|   Return Test result  |----------|
+      |       +-----------------------+          |
+      |       +-----------------------+          |
+      |-------|   UnDeploy Archives   |--------->|
+      |       +-----------------------+          |
+      |                                          |
+      |       +-----------------------+          |
+      |------ | Stop Embedded TomEE   |--------->|
+      |       +-----------------------+          |
+      |                                          |
+....
+
+You can learn more about _Arquillian Persistence Extension_ at <<APEHome, Arquillian Persistence Home>>.
+
+== Relationships
+
+To link one entity to an other, you need to map the association property as a to one association.
+In the relational model, you can either use a foreign key or an association table, or (a bit less common) share the same primary key value between the two entities.
+
+By default, *single* point associations are *eagerly fetched* in _JPA 2_.
+
+=== One to One
+
+Use `@OneToOne` if only a single entity can point to the the target entity.
+
+[source, java]
+.src/main/java/com/scytl/hibernate/Movie.java
+----
+include::{sources-hibernate-example}/src/main/java/com/scytl/hibernate/Movie.java[tags=onetoone, indent=0]
+----
+<1> Sets `OneToOne` association, makes the the other entity the owner of the relationship and adds cascade operations to the entity.
+<2> In bidirectional associations we always have to update the association on both sides.
+<3> Removes a _movidedetail_ instance. This works because `orphanRemoval` attribute is set to true.
+
+[source, java]
+.src/main/java/com/scytl/hibernate/MovieDetail.java
+----
+include::{sources-hibernate-example}/src/main/java/com/scytl/hibernate/MovieDetail.java[tags=onetoone, indent=0]
+----
+<1> Sets `OneToOne` association.
+<2> Sets a common primary key value in both the tables. This is perfectly valid in one-to-one relationships.
+
+And finally the test:
+
+[source, java]
+.src/test/java/com/scytl/hibernate/MoviesServiceTest.java
+----
+include::{sources-hibernate-example}/src/test/java/com/scytl/hibernate/MoviesServiceTest.java[tags=onetoone, indent=0]
+----
+<1> Because of cascade `MovieDetail` is inserted automatically.
+<2> Nullify given instance
+
+=== One To Many - Many To One
+
+The most common _Parent – Child_ association consists of a one-to-many and a many-to-one relationship, where the cascade being useful for the one-to-many side only
+
+[source, java]
+.src/main/java/com/scytl/hibernate/Comment.java
+----
+include::{sources-hibernate-example}/src/main/java/com/scytl/hibernate/Comment.java[tags=onetomany, indent=0]
+----
+<1> Sets `ManyToOne` relationship.
+
+[source, java]
+.src/main/java/com/scytl/hibernate/Movie.java
+----
+include::{sources-hibernate-example}/src/main/java/com/scytl/hibernate/Movie.java[tags=onetomany, indent=0]
+----
+<1> Sets `OneToMany` relationship with cascading operations and setting the other side as owner of the relationship.
+<2> In bidirectional associations we always have to update the association on both sides.
+<3> Removes a _comment_ instance. This works because `orphanRemoval` attribute is set to true.
+
+And finally the test:
+
+[source, java]
+.src/test/java/com/scytl/hibernate/MoviesServiceTest.java
+----
+include::{sources-hibernate-example}/src/test/java/com/scytl/hibernate/MoviesServiceTest.java[tags=onetomany, indent=0]
+----
+<1> `@ApplyScriptBefore` annotation executes _sql_ scripts before executing the test. In this case we need it to drop reference integrity checks.
+<2> Create the movie with all the comments.
+
+[source, sql]
+.src/test/resources/scripts/drop-referntial-integrity.sql
+----
+include::{sources-hibernate-example}/src/test/resources/scripts/drop-referential-integrity.sql[]
+----
+
+INFO: We need to remove referential integrity due to _dbunit_ limitation on calculating the correct order on cleaning a database.
+The best way to avoid problems on cleaning phase when working with associations is to remove the referential integrity checks.
+
+=== Many to Many
+
+The _many-to-many_ relationship is the most complex relationship to express because both entities play the role of parent and child.
+Having an example of _many-to_many_ association it has not much sense since most of the time you need additional information stored in the _link table_.
+In this case, it is much better to use two one-to-many associations to an intermediate link class.
+
+WARNING: We shouldn’t default to `CascadeType.ALL`, because the `CascadeTpe.REMOVE` might end-up deleting more than we’re expecting
+
+== Quering Data
+
+In _JPA_ there are two different ways to query data. Using *JPQL* or *Criteria API*.
+
+=== JPQL
+
+_JPQL_ is used to make queries against entities stored in a relational database.
+It is heavily inspired by _SQL_, and its queries resemble _SQL_ queries in syntax, but operate against _JPA_ entity objects rather than directly with database tables.
+
+Let's see how to define a named query.
+
+[source, java]
+.src/main/java/com/scytl/hibernate/Movie.java
+----
+include::{sources-hibernate-example}/src/main/java/com/scytl/hibernate/Movie.java[tags=jpql, indent=0]
+----
+<1> Defines a named query with name `Movie.findByTitle` and finds all movies with a given name. Note that `:title` placeholder is used to identify the paramter.
+
+Then we can add in our service class the preparation and execution of the query:
+
+[source, java]
+.src/main/java/com/scytl/hibernate/MoviesService.java
+----
+include::{sources-hibernate-example}/src/main/java/com/scytl/hibernate/MoviesService.java[tags=jpql, indent=0]
+----
+<1> Creates a query instance from query name defined at `Movie` class. Note that also we are defining the return type.
+<2> Sets a value to named parameter `title`. Note that colon(_:_) character is not used here.
+<3> Returns the list of movies that matches the query condition.
+
+And finally the test:
+
+[source, java]
+.src/test/java/com/scytl/hibernate/MoviesServiceTest.java
+----
+include::{sources-hibernate-example}/src/test/java/com/scytl/hibernate/MoviesServiceTest.java[tags=jpql, indent=0]
+----
+
+=== Criteria API
+
+The _Criteria API_ is used to define queries for entities and their persistent state by creating query-defining objects.
+Criteria queries are written using _Java_ programming language _APIs_, are typesafe, and are portable.
+Such queries work regardless of the underlying data store.
+
+[[criteria-example]]
+[source, java]
+.src/main/java/com/scytl/hibernate/MoviesService.java
+----
+include::{sources-hibernate-example}/src/main/java/com/scytl/hibernate/MoviesService.java[tags=criteria, indent=0]
+----
+<1> Creates a criteria builder.
+<2> Builds a `from` sentence.
+<3> Defines the type of the parameter of the query.
+<4> Defines the `where` clause.
+
+Note that we don't need to modify the model object.
+
+==== Metamodel API
+
+The *Metamodel API* is used to create a metamodel of the managed entities in a particular persistence unit.
+For each entity class in a particular package, a metamodel class is created with a trailing underscore and with attributes that correspond to the persistent fields or properties of the entity class.
+
+Have you noticed in previous <<criteria-example, example>> the parameter name `title` is hardcoded in query.
+So if it is changed using `@Column` annotation, the queries will start failing.
+
+With _Metamodel API_ you are hidding this details so you can details without affecting the queries.
+Moreover you _Metamodel API_ allows the compiler to enforce type checking instead of throwing a `ClassCastException` at runtime.
+
+Following previous entity object:
+
+[source, java]
+.src/main/java/com/scytl/hibernate/Movie_.java
+----
+package com.scytl.hibernate;
+
+import javax.annotation.Generated;
+import javax.persistence.metamodel.ListAttribute;
+import javax.persistence.metamodel.SingularAttribute;
+import javax.persistence.metamodel.StaticMetamodel;
+
+@Generated(value = "org.hibernate.jpamodelgen.JPAMetaModelEntityProcessor") //<1>
+@StaticMetamodel(Movie.class) //<2>
+public abstract class Movie_ {
+
+  public static volatile SingularAttribute<Movie, MovieDetail> movieDetail; //<3>
+  public static volatile ListAttribute<Movie, Comment> comments; //<4>
+  public static volatile SingularAttribute<Movie, Long> id;
+  public static volatile SingularAttribute<Movie, String> title;
+  public static volatile SingularAttribute<Movie, Integer> releasedYear;
+
+}
+----
+<1> `@Generated` annotation is a _document_ annotation.
+<2> The `StaticMetamodel` annotation specifies that the class is a metamodel class that represents the entity, mapped superclass, or embeddable class designated by the value element.
+<3> Sets `movideDetail` field as single field for type `Movie` and of type `MovieDetail`.
+<4> Sets `comments` field as a list of `Comments`.
+
+And then you can use this _metamodel_ class in _criteria_ query.
+
+[source, java]
+.src/main/java/com/scytl/hibernate/MoviesService.java
+----
+include::{sources-hibernate-example}/src/main/java/com/scytl/hibernate/MoviesService.java[tags=metamodel, indent=0]
+----
+<1> Gets the `title` column name. Note that metamodel class is used instead of harcoding the name of the column.
+<2> Value can be set directly instead of creating a `ParameterExpression`.
+
+_Metamodel_ class can be generated automatically using _Maven_.
+You only need to add `maven-processor-plugin`.
+
+[source, pom]
+.pom.xml
+----
+include::{sources-hibernate-example}/pom.xml[tags=metamodel, indent=0]
+----
+
+You can configure _Eclipse_ to generate these classes automatically too by reusing _Maven_ configuration.
+It can be done in _preferences_ section.
+
+image::metamodel.png[]
+
+== Tricks
+
+* CASCADE MERGE(http://vladmihalcea.com/2015/03/05/a-beginners-guide-to-jpa-and-hibernate-cascade-types/)
+* Delete by finding first by id
+* Adding a many knowing id of one
+* update of fields
+* projection
+* reusing Criteria (pattern)
+

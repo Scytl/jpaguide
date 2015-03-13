@@ -1,0 +1,4 @@
+git checkout master
+mv rest.html /tmp/rest.html
+git checkout gh-pages
+mv /tmp/rest.html ./index.html

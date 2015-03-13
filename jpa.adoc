@@ -1,0 +1,25 @@
+= REST
+Architecture <arch.se.bcn@scytl.com>
+v1.0, October 22, 2014: First release
+:toc: right
+:icons: font
+:source-highlighter: highlightjs
+:sectanchors:
+:toclevels: 4
+:numbered:
+:imagesdir: ./images
+:chapters: chapters
+:data-uri:
+:sources-hibernate-example: ../sources/hibernate-example
+
+include::{chapters}/jpa.adoc[leveloffset=+1]
+
+
+:numbered!:
+== Bibliography
+
+[bibliography]
+
+== Copyright and License
+
+image::https://i.creativecommons.org/l/by-nc-sa/4.0/88x31.png[]

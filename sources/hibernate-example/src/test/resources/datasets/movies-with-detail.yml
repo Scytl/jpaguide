@@ -1,0 +1,8 @@
+movie:
+  - id: 1
+    title: The Matrix
+    releasedYear: 1999
+movieDetail:
+  - producedBy: Joel Silver
+    directedBy: The Wachowski Brothers
+    id: 1
