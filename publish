@@ -1,4 +1,4 @@
 git checkout master
-mv rest.html /tmp/jpa.html
+mv jpa.html /tmp/jpa.html
 git checkout gh-pages
 mv /tmp/jpa.html ./index.html
