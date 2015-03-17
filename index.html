@@ -462,7 +462,13 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </li>
 </ul>
 </li>
-<li><a href="#_tricks">2.6. Tricks</a></li>
+<li><a href="#_locking">2.6. Locking</a>
+<ul class="sectlevel3">
+<li><a href="#_optimistic_locking">2.6.1. Optimistic Locking</a></li>
+<li><a href="#_pessimistic_locking">2.6.2. Pessimistic Locking</a></li>
+</ul>
+</li>
+<li><a href="#_tricks">2.7. Tricks</a></li>
 </ul>
 </li>
 <li><a href="#_bibliography">Bibliography</a></li>
@@ -812,9 +818,9 @@ public class MoviesService {
 <div class="sect3">
 <h4 id="_testing"><a class="anchor" href="#_testing"></a>2.3.4. Testing</h4>
 <div class="paragraph">
-<p>Writting unit tests for persistence layer can become a big problem because there are a lot of elements that are controlled or managed by the container.
+<p>Writing unit tests for persistence layer can become a big problem because there are a lot of elements that are controlled or managed by the container.
 For example transactions, creation of <code>EntityManager</code> or definition of the datasource.
-So if you try to create <em>mocks</em> for everything you will end up by re-implementing a <em>JPA</em> provider and/or writting a lot of boilerplate code.</p>
+So if you try to create <em>mocks</em> for everything you will end up by re-implementing a <em>JPA</em> provider and/or writing a lot of boilerplate code.</p>
 </div>
 <div class="paragraph">
 <p>If instead of writing a unit test you decide to use an integration test but avoiding using container features such as creation of <code>EntityManager</code> or managing transactions you will end up with a test which will look something like:</p>
@@ -891,7 +897,7 @@ Moreover the implementation of these operations are far away from simple.</p>
 <div class="content">
 <div class="title">Arquillian</div>
 <div class="paragraph">
-<p><strong>Arquillian</strong> is a testing framework that fills the gap between unit tests and integration tests so writting integration tests is as simple as writing a unit test but running within/against an application server.</p>
+<p><strong>Arquillian</strong> is a testing framework that fills the gap between unit tests and integration tests so writing integration tests is as simple as writing a unit test but running within/against an application server.</p>
 </div>
 <div class="paragraph">
 <p>It deals with all the plumbing of container management, deployment, and framework initialization so you can focus on the task of writing your tests—real tests.
@@ -1569,7 +1575,8 @@ public void removeComment(Comment comment) { <i class="conum" data-value="3"></i
 <div class="title">src/test/java/com/scytl/hibernate/MoviesServiceTest.java</div>
 <div class="content">
 <pre class="highlightjs highlight"><code class="language-java" data-lang="java">@Test
-@ApplyScriptBefore("scripts/drop-referential-integrity.sql") <i class="conum" data-value="1"></i><b>(1)</b>
+@ApplyScriptBefore("scripts/drop-referential-integrity.sql")
+<i class="conum" data-value="1"></i><b>(1)</b>
 @ShouldMatchDataSet("datasets/expected-movies-with-comments.yml")
 public void shouldInsertMoviesAndComments() {
     Comment comment = new Comment();
@@ -1775,7 +1782,7 @@ For each entity class in a particular package, a metamodel class is created with
 So if it is changed using <code>@Column</code> annotation, the queries will start failing.</p>
 </div>
 <div class="paragraph">
-<p>With <em>Metamodel API</em> you are hidding this details so you can details without affecting the queries.
+<p>With <em>Metamodel API</em> you are hiding this details so you can details without affecting the queries.
 Moreover you <em>Metamodel API</em> allows the compiler to enforce type checking instead of throwing a <code>ClassCastException</code> at runtime.</p>
 </div>
 <div class="paragraph">
@@ -1914,7 +1921,132 @@ It can be done in <em>preferences</em> section.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_tricks"><a class="anchor" href="#_tricks"></a>2.6. Tricks</h3>
+<h3 id="_locking"><a class="anchor" href="#_locking"></a>2.6. Locking</h3>
+<div class="paragraph">
+<p>If the application will have concurrent writers to the same objects, then a locking strategy is critical so that data corruption can be prevented.
+There are two strategies for preventing concurrent modification of the same object/row; optimistic and pessimistic locking.
+Technically there is a third strategy, ostrich locking, or no locking, which means put your head in the sand and ignore the issue.</p>
+</div>
+<div class="sect3">
+<h4 id="_optimistic_locking"><a class="anchor" href="#_optimistic_locking"></a>2.6.1. Optimistic Locking</h4>
+<div class="paragraph">
+<p>Optimistic locking assumes that the data will not be modified between when you read the data until you write the data.
+This is the most common style of locking used and recommended in today&#8217;s persistence solutions.
+The strategy involves checking that one or more values from the original object read, are still the same when updating it.
+This verifies that the object has not changed by another user in between the read and the write.</p>
+</div>
+<div class="paragraph">
+<p>The <code>@Version</code> annotation element is used to define the optimistic lock version field.</p>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-tip" title="Tip"></i>
+</td>
+<td class="content">
+The field can either be numeric or a timestamp value.
+A numeric value is recommended as a numeric value is more precise, portable, performant and easier to deal with than a timestamp.
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>Let&#8217;s modify <code>Movie</code> entity to have a <code>version</code> attribute.</p>
+</div>
+<div class="listingblock">
+<div class="title">src/main/java/com/scytl/hibernate/Movie.java</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java" data-lang="java">@Version
+private int version;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And a test that proves that optimistic locking works as expected.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_pessimistic_locking"><a class="anchor" href="#_pessimistic_locking"></a>2.6.2. Pessimistic Locking</h4>
+<div class="paragraph">
+<p>Pessimistic locking means acquiring a lock on the object before you begin to edit the object, to ensure that no other users are editing the object.
+Pessimistic locking is typically implemented through using database row locks.
+The data is rad and locked, the changes are made and the transaction is committed releasing the locks.</p>
+</div>
+<div class="paragraph">
+<p>Because pessimistic locking is applied at row level, we need a way to lock a row.
+In case of <em>JPA</em>, methods like <code>find</code>, <code>refresh</code> or <code>lock</code> offers different points for setting lock strategy.</p>
+</div>
+<div class="listingblock">
+<div class="title">Lock after Read.</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java" data-lang="java">Movie m = entityManager.find(Movie.class, id);
+entityManager.lock(m, PESSIMISTIC_READ); <i class="conum" data-value="1"></i><b>(1)</b></code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Lock after read. Risk of stale object and may cause an <code>OptimisticLockException</code>.</td>
+</tr>
+</table>
+</div>
+<div class="listingblock">
+<div class="title">Lock after Read</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java" data-lang="java">Movie m = entityManager.find(Movie.class, id, PESSIMISTIC_READ); <i class="conum" data-value="1"></i><b>(1)</b></code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Locks longer could cause bottlenecks.</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>As you may notice in previous examples you need to set which pessimistic strategy to follow.
+In <em>JPA 2.0</em> there are two <em>pessimistic</em> strategies:</p>
+</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1">PESSIMISTIC READ</dt>
+<dd>
+<p>A shared (read) lock blocks writers, allowing multiple readers to proceed.</p>
+</dd>
+<dt class="hdlist1">PESSIMISTIC WRITE</dt>
+<dd>
+<p>An exclusive (write) lock blocks both readers and writers, making all write operations be applied sequentially.</p>
+</dd>
+</dl>
+</div>
+<div class="paragraph">
+<p>To simplify the difference between them, the best way is describing in terms of cases:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>PESSIMISTIC_READ</code> doesn&#8217;t block <code>PESSIMISTIC_READ</code> lock requests.</p>
+</li>
+<li>
+<p><code>PESSIMISTIC_READ</code> blocks <strong>UPDATE</strong> implicit lock requests.</p>
+</li>
+<li>
+<p><code>PESSIMISTIC_READ</code> blocks <code>PESSIMISTIC_WRITE</code> lock requests.</p>
+</li>
+<li>
+<p><code>PESSIMISTIC_WRITE</code> blocks <code>PESSIMISTIC_READ</code> lock requests.</p>
+</li>
+<li>
+<p><code>PESSIMISTIC_WRITE</code> blocks <code>PESSIMISTIC_WRITE</code> lock requests.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_tricks"><a class="anchor" href="#_tricks"></a>2.7. Tricks</h3>
 <div class="ulist">
 <ul>
 <li>
@@ -1960,7 +2092,7 @@ It can be done in <em>preferences</em> section.</p>
 <div id="footer">
 <div id="footer-text">
 Version 1.0<br>
-Last updated 2015-03-13 16:06:36 CET
+Last updated 2015-03-17 09:49:09 CET
 </div>
 </div>
 </body>
