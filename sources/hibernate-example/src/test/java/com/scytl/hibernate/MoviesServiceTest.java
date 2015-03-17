@@ -12,6 +12,8 @@ import java.util.concurrent.FutureTask;
 
 import javax.annotation.Resource;
 import javax.ejb.EJB;
+import javax.persistence.OptimisticLockException;
+import javax.transaction.RollbackException;
 import javax.transaction.Transaction;
 import javax.transaction.UserTransaction;
 
@@ -21,6 +23,8 @@ import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.arquillian.persistence.ApplyScriptBefore;
 import org.jboss.arquillian.persistence.ShouldMatchDataSet;
 import org.jboss.arquillian.persistence.UsingDataSet;
+import org.jboss.arquillian.transaction.api.annotation.TransactionMode;
+import org.jboss.arquillian.transaction.api.annotation.Transactional;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.EmptyAsset;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
@@ -187,16 +191,16 @@ public class MoviesServiceTest {
     }
 
     // tag::version[]
-    @Test
+    @Test(expected=RollbackException.class)
+    @Transactional(value = TransactionMode.DISABLED) //<1>
     @UsingDataSet("datasets/movies-with-version.yml")
-    public void shouldThrowAnOptimisticLockingException() throws Exception {
-        Transaction transaction = OpenEJB.getTransactionManager().getTransaction();
-        System.out.println(transaction);
+    public void shouldThrowAnOptimisticLockingException()
+            throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
         userTransaction.begin();
         Movie movie = moviesService.findMovieById(1L);
 
-        ExecutorService executor = Executors.newFixedThreadPool(1);
-        Future<Movie> modifyMovie = executor.submit(() -> {
+        Future<Movie> modifyMovie = executor.submit(() -> { //<2>
             userTransaction.begin();
             Movie movie2 = moviesService.findMovieById(1L);
             movie2.setReleasedYear(2001);
@@ -205,8 +209,18 @@ public class MoviesServiceTest {
         });
         modifyMovie.get();
         movie.setReleasedYear(2000);
-        userTransaction.commit();
+        userTransaction.commit(); //<3>
     }
-
     // end::version[]
+
+    // tag::workingversion[]
+    @Test
+    @UsingDataSet("datasets/movies-with-version.yml")
+    @ShouldMatchDataSet("datasets/expected-movies-with-version.yml")
+    public void shouldUpdateVersionField()
+            throws Exception {
+        Movie movie = moviesService.findMovieById(1L);
+        movie.setReleasedYear(2000);
+    }
+    // end::workingversion[]
 }

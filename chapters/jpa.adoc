@@ -887,6 +887,39 @@ include::{sources-hibernate-example}/src/main/java/com/scytl/hibernate/Movie.jav
 
 And a test that proves that optimistic locking works as expected.
 
+[source, java]
+.src/test/java/com/scytl/hibernate/MoviesServiceTest.java
+----
+include::{sources-hibernate-example}/src/test/java/com/scytl/hibernate/MoviesServiceTest.java[tags=version, indent=0]
+----
+<1> Disable transactions because a fine-grained control for the test is required.
+<2> A modification in different thread is done.
+<3> Second commit throws a RollbackException because of concurrent modification.
+
+A test for ensuring that version is updated can be written with following dataset.
+
+[source, yml]
+.src/test/resources/datasets/movies-with-version.yml
+----
+include::{sources-hibernate-example}/src/test/resources/datasets/movies-with-version.yml[]
+----
+
+And the test:
+
+[source, java]
+.src/test/java/com/scytl/hibernate/MoviesServiceTest.java
+----
+include::{sources-hibernate-example}/src/test/java/com/scytl/hibernate/MoviesServiceTest.java[tags=workingversion, indent=0]
+----
+
+And the final state of the database is:
+
+[source, yml]
+.src/test/resources/datasets/expected-movies-with-version.yml
+----
+include::{sources-hibernate-example}/src/test/resources/datasets/expected-movies-with-version.yml[]
+----
+<1> Version is updated by one.
 
 === Pessimistic Locking
 

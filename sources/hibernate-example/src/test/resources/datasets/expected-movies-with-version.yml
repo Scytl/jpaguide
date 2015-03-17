@@ -1,0 +1,5 @@
+movie:
+  - id: 1
+    title: The Matrix
+    releasedYear: 2000
+    version: 2 # <1>
