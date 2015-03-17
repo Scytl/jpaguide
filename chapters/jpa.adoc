@@ -223,9 +223,9 @@ public class MoviesService {
 
 === Testing
 
-Writting unit tests for persistence layer can become a big problem because there are a lot of elements that are controlled or managed by the container.
+Writing unit tests for persistence layer can become a big problem because there are a lot of elements that are controlled or managed by the container.
 For example transactions, creation of `EntityManager` or definition of the datasource.
-So if you try to create _mocks_ for everything you will end up by re-implementing a _JPA_ provider and/or writting a lot of boilerplate code.
+So if you try to create _mocks_ for everything you will end up by re-implementing a _JPA_ provider and/or writing a lot of boilerplate code.
 
 If instead of writing a unit test you decide to use an integration test but avoiding using container features such as creation of `EntityManager` or managing transactions you will end up with a test which will look something like:
 
@@ -267,7 +267,7 @@ And this is exactly what *Arquillian* and *Arquillian Persistence Extension* fix
 
 .Arquillian
 ****
-*Arquillian* is a testing framework that fills the gap between unit tests and integration tests so writting integration tests is as simple as writing a unit test but running within/against an application server.
+*Arquillian* is a testing framework that fills the gap between unit tests and integration tests so writing integration tests is as simple as writing a unit test but running within/against an application server.
 
 It deals with all the plumbing of container management, deployment, and framework initialization so you can focus on the task of writing your tests—real tests.
 *Arquillian* minimizes the burden on you by covering aspects surrounding test execution; some of these aspects are as follows:
@@ -803,7 +803,7 @@ For each entity class in a particular package, a metamodel class is created with
 Have you noticed in previous <<criteria-example, example>> the parameter name `title` is hardcoded in query.
 So if it is changed using `@Column` annotation, the queries will start failing.
 
-With _Metamodel API_ you are hidding this details so you can details without affecting the queries.
+With _Metamodel API_ you are hiding this details so you can details without affecting the queries.
 Moreover you _Metamodel API_ allows the compiler to enforce type checking instead of throwing a `ClassCastException` at runtime.
 
 Following previous entity object:
@@ -859,6 +859,73 @@ It can be done in _preferences_ section.
 
 image::metamodel.png[]
 
+== Locking
+
+If the application will have concurrent writers to the same objects, then a locking strategy is critical so that data corruption can be prevented.
+There are two strategies for preventing concurrent modification of the same object/row; optimistic and pessimistic locking.
+Technically there is a third strategy, ostrich locking, or no locking, which means put your head in the sand and ignore the issue.
+
+=== Optimistic Locking
+
+Optimistic locking assumes that the data will not be modified between when you read the data until you write the data.
+This is the most common style of locking used and recommended in today's persistence solutions.
+The strategy involves checking that one or more values from the original object read, are still the same when updating it.
+This verifies that the object has not changed by another user in between the read and the write.
+
+The `@Version` annotation element is used to define the optimistic lock version field.
+
+TIP: The field can either be numeric or a timestamp value.
+A numeric value is recommended as a numeric value is more precise, portable, performant and easier to deal with than a timestamp.
+
+Let's modify `Movie` entity to have a `version` attribute.
+
+[source, java]
+.src/main/java/com/scytl/hibernate/Movie.java
+----
+include::{sources-hibernate-example}/src/main/java/com/scytl/hibernate/Movie.java[tags=version, indent=0]
+----
+
+And a test that proves that optimistic locking works as expected.
+
+
+=== Pessimistic Locking
+
+Pessimistic locking means acquiring a lock on the object before you begin to edit the object, to ensure that no other users are editing the object.
+Pessimistic locking is typically implemented through using database row locks.
+The data is rad and locked, the changes are made and the transaction is committed releasing the locks.
+
+Because pessimistic locking is applied at row level, we need a way to lock a row.
+In case of _JPA_, methods like `find`, `refresh` or `lock` offers different points for setting lock strategy.
+
+[source, java]
+.Lock after Read.
+----
+Movie m = entityManager.find(Movie.class, id);
+entityManager.lock(m, PESSIMISTIC_READ); //<1>
+----
+<1> Lock after read. Risk of stale object and may cause an `OptimisticLockException`.
+
+[source, java]
+.Lock after Read
+----
+Movie m = entityManager.find(Movie.class, id, PESSIMISTIC_READ); //<1>
+----
+<1> Locks longer could cause bottlenecks.
+
+As you may notice in previous examples you need to set which pessimistic strategy to follow.
+In _JPA 2.0_ there are two _pessimistic_ strategies:
+
+PESSIMISTIC READ:: A shared (read) lock blocks writers, allowing multiple readers to proceed.
+PESSIMISTIC WRITE:: An exclusive (write) lock blocks both readers and writers, making all write operations be applied sequentially.
+
+To simplify the difference between them, the best way is describing in terms of cases:
+
+* `PESSIMISTIC_READ` doesn't block `PESSIMISTIC_READ` lock requests.
+* `PESSIMISTIC_READ` blocks *UPDATE* implicit lock requests.
+* `PESSIMISTIC_READ` blocks `PESSIMISTIC_WRITE` lock requests.
+* `PESSIMISTIC_WRITE` blocks `PESSIMISTIC_READ` lock requests.
+* `PESSIMISTIC_WRITE` blocks `PESSIMISTIC_WRITE` lock requests.
+
 == Tricks
 
 * CASCADE MERGE(http://vladmihalcea.com/2015/03/05/a-beginners-guide-to-jpa-and-hibernate-cascade-types/)
@@ -867,4 +934,3 @@ image::metamodel.png[]
 * update of fields
 * projection
 * reusing Criteria (pattern)
-

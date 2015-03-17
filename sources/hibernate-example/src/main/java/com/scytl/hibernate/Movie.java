@@ -11,6 +11,7 @@ import javax.persistence.NamedQueries;
 import javax.persistence.NamedQuery;
 import javax.persistence.OneToMany;
 import javax.persistence.OneToOne;
+import javax.persistence.Version;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 
@@ -32,6 +33,12 @@ public class Movie {
     @Min(1900)
     private int releasedYear;
 
+    // tag::version[]
+    @Version
+    private int version;
+
+    // end::version[]
+    
     // tag::onetoone[]
     @OneToOne(mappedBy = "movie", cascade = CascadeType.ALL, orphanRemoval = true) //<1>
     private MovieDetail movieDetail;
@@ -86,6 +93,10 @@ public class Movie {
 
     public int getReleasedYear() {
         return releasedYear;
+    }
+
+    public long getId() {
+        return id;
     }
 
     @Override
