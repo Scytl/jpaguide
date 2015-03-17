@@ -959,6 +959,33 @@ To simplify the difference between them, the best way is describing in terms of 
 * `PESSIMISTIC_WRITE` blocks `PESSIMISTIC_READ` lock requests.
 * `PESSIMISTIC_WRITE` blocks `PESSIMISTIC_WRITE` lock requests.
 
+== Batching
+
+Storing a large number of entity objects requires special consideration.
+If you are trying to insert thousands of rows in the database using _JPA_ it would probably fail over with an `OutOfMemoryException`.
+This is because _JPA_ providers (or at least _Hibernate_) stores objects in memory as a first-level cache.
+
+To avoid this situation the best way is to call `flush` and `clear` regularly in order to control the size of the first-level cache.
+
+[source, java]
+.src/main/java/com/scytl/hibernate/MoviesBatchService.java
+----
+include::{sources-hibernate-example}/src/main/java/com/scytl/hibernate/MoviesBatchService.java[tags=simplebatch, indent=0]
+----
+<1> Instances are cleared flushed to database and cleared from memory.
+
+But this approach has one problem, updates that are sent to the database using `flush` are considered temporary and are only visible to the owner `EntityManager` until a `commit`.
+
+TIP: To avoid complex rollback situation the best way is to split batch store into multiple transactions.
+It is more efficient multiple transactions that one transaction with multiple calls to `flush` and `clear`.
+
+[source, java]
+.src/main/java/com/scytl/hibernate/MoviesBatchService.java
+----
+include::{sources-hibernate-example}/src/main/java/com/scytl/hibernate/MoviesBatchService.java[tags=multipletx, indent=0]
+----
+<1> Instances are commited instead of flushed.
+
 == Tricks
 
 * CASCADE MERGE(http://vladmihalcea.com/2015/03/05/a-beginners-guide-to-jpa-and-hibernate-cascade-types/)

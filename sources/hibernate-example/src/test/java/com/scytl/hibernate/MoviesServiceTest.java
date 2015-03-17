@@ -74,9 +74,16 @@ public class MoviesServiceTest {
 
     @EJB
     MoviesService moviesService;
+    @EJB
+    MoviesBatchService moviesBatchService;
 
     @Resource
     UserTransaction userTransaction;
+
+    @Test
+    public void shouldBatch() throws Exception {
+        moviesBatchService.createMoviesInSeveralTransactions();
+    }
 
     @Test
     @ShouldMatchDataSet("datasets/expected-movies.yml")
