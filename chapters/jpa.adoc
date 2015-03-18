@@ -985,12 +985,3 @@ It is more efficient multiple transactions that one transaction with multiple ca
 include::{sources-hibernate-example}/src/main/java/com/scytl/hibernate/MoviesBatchService.java[tags=multipletx, indent=0]
 ----
 <1> Instances are commited instead of flushed.
-
-== Tricks
-
-* CASCADE MERGE(http://vladmihalcea.com/2015/03/05/a-beginners-guide-to-jpa-and-hibernate-cascade-types/)
-* Delete by finding first by id
-* Adding a many knowing id of one
-* update of fields
-* projection
-* reusing Criteria (pattern)

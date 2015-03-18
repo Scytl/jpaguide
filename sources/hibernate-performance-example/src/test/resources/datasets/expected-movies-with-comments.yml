@@ -1,0 +1,10 @@
+movie:
+  - title: The Matrix
+    releasedYear: 1999
+comment:
+  - review: Awesome movie
+    movie_id: 1
+  - review: best
+    movie_id: 1
+  - review: must see
+    movie_id: 1

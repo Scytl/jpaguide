@@ -1,0 +1,120 @@
+= JPA and performance
+
+There is no silver bullet about how to make a _JPA_ application performant.
+The best way to improve the performance of a _JPA_ application is by inspecting _SQL_ sentences executed in each operation by the _JPA_ provider.
+
+Because we are using _Hibernate_ as _JPA_ provider, this can be done by enabling the `show_sql` parameter.
+
+[source, xml]
+.webapp/WEB-INF/persistence.xml
+----
+include::{sources-hibernate-perf}/src/test/resources/test-persistence.xml[]
+----
+<1> Adds _Hibernate_ property to print _SQL_ sentences to console.
+
+== Updating A Field
+
+Updating a field in an entity can be an slow operation if it is not done correctly.
+Sometimes you cannot avoid some queries but other times you can help a lot _Hibernate_ to improve the _update_ operation.
+
+=== Merge
+
+First way one may think to update an instance may be using `merge` operation.
+
+[source, java]
+.src/main/java/com/scytl/hibernate/MoviesService.java
+----
+include::{sources-hibernate-perf}/src/main/java/com/scytl/hibernate/MoviesService.java[tags=merge, indent=0]
+----
+<1> Merge the object to database. It can be a deattached object.
+
+And if you run this code you will end up by next two queries.
+
+....
+Hibernate: select movie0_.id as id1_1_2_, movie0_.releasedYear as released2_1_2_, movie0_.title as title3_1_2_, comments1_.movie_id as movie_id3_1_4_, comments1_.id as id1_0_4_, comments1_.id as id1_0_0_, comments1_.movie_id as movie_id3_0_0_, comments1_.review as review2_0_0_, moviedetai2_.id as id1_2_1_, moviedetai2_.directedBy as directed2_2_1_, moviedetai2_.producedBy as produced3_2_1_ from Movie movie0_ left outer join Comment comments1_ on movie0_.id=comments1_.movie_id left outer join MovieDetail moviedetai2_ on movie0_.id=moviedetai2_.id where movie0_.id=?
+Hibernate: update Movie set releasedYear=?, title=? where id=?
+....
+
+First the whole entity is loaded. Note that relationships are loaded as well by using outer joins.
+Then an update for all fields is constructed, the ones that have changed and the ones that haven't changed.
+
+=== Update
+
+Of course we can do it better than <<Merge>> and we can use the implicit update.
+
+[source, java]
+.src/main/java/com/scytl/hibernate/MoviesService.java
+----
+include::{sources-hibernate-perf}/src/main/java/com/scytl/hibernate/MoviesService.java[tags=implicit, indent=0]
+----
+<1> Finds `Movie` by id.
+<2> Updates field and when transaction is commit the _update_ operatio is fired.
+
+....
+Hibernate: select movie0_.id as id1_1_1_, movie0_.releasedYear as released2_1_1_, movie0_.title as title3_1_1_, moviedetai1_.id as id1_2_0_, moviedetai1_.directedBy as directed2_2_0_, moviedetai1_.producedBy as produced3_2_0_ from Movie movie0_ left outer join MovieDetail moviedetai1_ on movie0_.id=moviedetai1_.id where movie0_.id=?
+Hibernate: update Movie set releasedYear=?, title=? where id=?
+....
+
+Now instead of loading the whole entity with all its relationship, we are simply loading the entity with eager properties.
+But the update is still updating all fields event not all has been modified.
+
+=== Dynamic Update
+
+We can change the behaviour of _update_ operation so _update_ statement contains only the modified fields.
+To change this we only need to use _Hibernate_ annotation called `DynamicUpdate`.
+
+[source, java]
+.src/main/java/com/scytl/hibernate/Movie.java
+----
+include::{sources-hibernate-perf}/src/main/java/com/scytl/hibernate/Movie.java[tags=dynamicupdate, indent=0]
+----
+
+Now running <<Update>> example the _SQL_ output will be slightly different:
+
+....
+Hibernate: select movie0_.id as id1_1_1_, movie0_.releasedYear as released2_1_1_, movie0_.title as title3_1_1_, moviedetai1_.id as id1_2_0_, moviedetai1_.directedBy as directed2_2_0_, moviedetai1_.producedBy as produced3_2_0_ from Movie movie0_ left outer join MovieDetail moviedetai1_ on movie0_.id=moviedetai1_.id where movie0_.id=?
+Hibernate: update Movie set releasedYear=? where id=?
+....
+
+Now the _update_ is only applied to modified field.
+
+WARNING: Using `@DynamicUpdate` can have an impact on performance because _Hibernate_ will generate _update_ query on demand for each call instead of caching it.
+`@DynamicUpdate` should be used only in case your table has a lot of attributes (25 or more), if not then the default options is the best choice.
+
+=== Getting reference
+
+We have been improving the speed of update process but most of you will agree that we still need two operations (one select and one update) to update a single field.
+And this can be changed by getting a proxied reference of the entity instead of loading the whole entity.
+
+
+
+== Adding at Many side
+
+In most of the cases when you have a _one to many_ relationship, the one part is created and then in future the many part is filled when an operation is required.
+For example a _movie_ is created once a time, but the _comments_ are inserted when a user writes a new comment.
+
+One way to do this is by next code:
+
+[source, java]
+./src/main/java/com/scytl/hibernate/MoviesService.java
+----
+include::{sources-hibernate-perf}/src/main/java/com/scytl/hibernate/MoviesService.java[tags=NPonetomany, indent=0]
+----
+<1> Finds the `Movie` where to add the comment.
+<2> Updates object with `Comment`.
+
+If we call this method _Hibernate_ will execute these queries:
+
+....
+Hibernate: select movie0_.id as id1_1_1_, ..., moviedetai1_.id as id1_2_0_, ... from Movie movie0_ left outer join MovieDetail moviedetai1_ on movie0_.id=moviedetai1_.id where movie0_.id=?
+Hibernate: insert into Comment (id, movie_id, review) values (default, ?, ?)
+....
+
+
+
+* CASCADE MERGE(http://vladmihalcea.com/2015/03/05/a-beginners-guide-to-jpa-and-hibernate-cascade-types/)
+* Delete by finding first by id
+* Adding a many knowing id of one
+* update of fields
+* projection
+* reusing Criteria (pattern)

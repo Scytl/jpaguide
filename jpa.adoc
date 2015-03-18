@@ -1,4 +1,4 @@
-= REST
+= JPA
 Architecture <arch.se.bcn@scytl.com>
 v1.0, October 22, 2014: First release
 :toc: right
@@ -11,9 +11,10 @@ v1.0, October 22, 2014: First release
 :chapters: chapters
 :data-uri:
 :sources-hibernate-example: ../sources/hibernate-example
+:sources-hibernate-perf: ../sources/hibernate-performance-example
 
 include::{chapters}/jpa.adoc[leveloffset=+1]
-
+include::{chapters}/performance.adoc[leveloffset=+1]
 
 :numbered!:
 == Bibliography
