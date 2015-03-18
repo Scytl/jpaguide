@@ -5,6 +5,7 @@ import java.util.List;
 
 import javax.persistence.CascadeType;
 import javax.persistence.Entity;
+import javax.persistence.FetchType;
 import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import javax.persistence.NamedQueries;
@@ -24,7 +25,6 @@ import org.hibernate.annotations.DynamicUpdate;
                 query="SELECT m FROM Movie m WHERE m.title = :title") //<1>
 })
 // tag::dynamicupdate[]
-//@DynamicUpdate
 public class Movie {
 // end::dynamicupdate[]
     @Id @GeneratedValue

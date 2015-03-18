@@ -66,14 +66,16 @@ To change this we only need to use _Hibernate_ annotation called `DynamicUpdate`
 [source, java]
 .src/main/java/com/scytl/hibernate/Movie.java
 ----
-include::{sources-hibernate-perf}/src/main/java/com/scytl/hibernate/Movie.java[tags=dynamicupdate, indent=0]
+@DynamicUpdate
+public class Movie {
+}
 ----
 
 Now running <<Update>> example the _SQL_ output will be slightly different:
 
 ....
-Hibernate: select movie0_.id as id1_1_1_, movie0_.releasedYear as released2_1_1_, movie0_.title as title3_1_1_, moviedetai1_.id as id1_2_0_, moviedetai1_.directedBy as directed2_2_0_, moviedetai1_.producedBy as produced3_2_0_ from Movie movie0_ left outer join MovieDetail moviedetai1_ on movie0_.id=moviedetai1_.id where movie0_.id=?
-Hibernate: update Movie set releasedYear=? where id=?
+* Hibernate: select movie0_.id as id1_1_1_, movie0_.releasedYear as released2_1_1_, movie0_.title as title3_1_1_, moviedetai1_.id as id1_2_0_, moviedetai1_.directedBy as directed2_2_0_, moviedetai1_.producedBy as produced3_2_0_ from Movie movie0_ left outer join MovieDetail moviedetai1_ on movie0_.id=moviedetai1_.id where movie0_.id=?
+* Hibernate: update Movie set releasedYear=? where id=?
 ....
 
 Now the _update_ is only applied to modified field.
@@ -87,6 +89,63 @@ We have been improving the speed of update process but most of you will agree th
 And this can be changed by getting a proxied reference of the entity instead of loading the whole entity.
 
 
+== Fetching
+
+In _JPA_ the _many_ part of a relationship is lazy by default.
+This means that executing a query against an entity, only attributes that are _eager_ will be filled and the rest (the _lazy_ ones) will be fetched lazily when they are first accessed.
+
+The *Lazy Fetching* strategy is a hint to the persistence provider runtime that data should be fetched lazily when it is first accessed.
+Although it may seems a good strategy and usually it is, depending on your queries it may affect negatively application performance.
+This is known as *N+1* problem.
+
+Let's see it in an example.
+Suppose we need to serialize to _json_ all movies and all comments that users has written about them.
+The code may look like:
+
+[source, java]
+.src/main/java/com/scytl/hibernate/MoviesService.java
+----
+include::{sources-hibernate-perf}/src/main/java/com/scytl/hibernate/MoviesService.java[tags=findalllazy, indent=0]
+----
+<1> Iterate over all _movies_ to serialize them.
+<2> Gets all comments of that movie.
+
+Now if we run this code with next dataset:
+
+[source, yaml]
+.src/test/resources/datasets/multiple-movies.yml
+----
+include::{sources-hibernate-perf}/src/test/resources/datasets/multiple-movies.yml[]
+----
+
+The _SQL_ queries that are executed are:
+
+....
+* Hibernate: select movie0_.id as id1_1_, ... from Movie movie0_
+* Hibernate: select moviedetai0_.id as id1_2_1_, ... from MovieDetail moviedetai0_ left outer join Movie movie1_ on moviedetai0_.id=movie1_.id where moviedetai0_.id=?
+* Hibernate: select moviedetai0_.id as id1_2_1_, ... from MovieDetail moviedetai0_ left outer join Movie movie1_ on moviedetai0_.id=movie1_.id where moviedetai0_.id=?
+* Hibernate: select comments0_.movie_id as movie_id3_1_1_, ... from Comment comments0_ where comments0_.movie_id=?
+* Hibernate: select comments0_.movie_id as movie_id3_1_1_, ... from Comment comments0_ where comments0_.movie_id=?
+....
+
+As you may see one query to `MovieDetail` and one query to `Comment` are executed for each `Movie`.
+More _movies_ means more queries.
+
+To fix this we could use `EAGER` approach to _one-to-many_ relationships but the problem is that in this case we are loading the whole comments of a movie even in queries that we don't need anything about comments.
+So we need to use *join fetch* in queries.
+
+[source, java]
+.src/main/java/com/scytl/hibernate/MoviesService.java
+----
+include::{sources-hibernate-perf}/src/main/java/com/scytl/hibernate/MoviesService.java[tags=joinfetch, indent=0]
+----
+<1> Fetches elements in query.
+
+Now only one query is executed.
+
+....
+Hibernate: select movie0_.id as id1_1_0_, ... from Movie movie0_ left outer join MovieDetail moviedetai1_ on movie0_.id=moviedetai1_.id left outer join Comment comments2_ on movie0_.id=comments2_.movie_id
+....
 
 == Adding at Many side
 

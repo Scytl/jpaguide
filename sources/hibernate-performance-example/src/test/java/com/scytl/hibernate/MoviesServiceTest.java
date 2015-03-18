@@ -1,30 +1,18 @@
 package com.scytl.hibernate;
 
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.nullValue;
+
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
 
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
 
-import javax.annotation.Resource;
 import javax.ejb.EJB;
-import javax.persistence.OptimisticLockException;
-import javax.transaction.RollbackException;
-import javax.transaction.Transaction;
-import javax.transaction.UserTransaction;
 
-import org.apache.openejb.OpenEJB;
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.arquillian.persistence.ApplyScriptBefore;
 import org.jboss.arquillian.persistence.ShouldMatchDataSet;
 import org.jboss.arquillian.persistence.UsingDataSet;
-import org.jboss.arquillian.transaction.api.annotation.TransactionMode;
-import org.jboss.arquillian.transaction.api.annotation.Transactional;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.EmptyAsset;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
@@ -76,6 +64,21 @@ public class MoviesServiceTest {
     MoviesService moviesService;
 
     @Test
+    @UsingDataSet("datasets/multiple-movies.yml")
+    @ApplyScriptBefore("scripts/drop-referential-integrity.sql")
+    public void shouldReturnAllCommentsWithJoinFetch() {
+       moviesService.serializeMoviesJoinFetch();
+    }
+
+    @Test
+    @UsingDataSet("datasets/multiple-movies.yml")
+    @ApplyScriptBefore("scripts/drop-referential-integrity.sql")
+    public void shouldReturnAllCommentsWithLazy() {
+       moviesService.serializeMovies();
+    }
+
+    @Test
+    @ApplyScriptBefore("scripts/drop-referential-integrity.sql")
     @UsingDataSet("datasets/movies.yml")
     public void shouldUpdateYearImplicitUpdate() {
         moviesService.updateReleasedYearImplicit(1L, 2000);
