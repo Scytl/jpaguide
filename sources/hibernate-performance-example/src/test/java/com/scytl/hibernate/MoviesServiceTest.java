@@ -118,7 +118,7 @@ public class MoviesServiceTest {
     public void shouldAddCommentPerformant() {
         Comment comment = new Comment();
         comment.setReview("must see");
-        moviesService.addCommentPerformant(1L, comment);
+        moviesService.createComment(1L, comment);
     }
     
 }

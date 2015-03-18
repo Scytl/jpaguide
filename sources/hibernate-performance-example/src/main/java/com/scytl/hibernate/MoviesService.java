@@ -90,9 +90,10 @@ public class MoviesService {
     // end::NPonetomany[]
 
     // tag:: Ponetomany[]
-    public void addCommentPerformant(Long id, Comment comment) {
-        Movie movie = entityManager.getReference(Movie.class, id);
-        movie.addComment(comment);
+    public void createComment(Long movieId, Comment comment) {
+        Movie movie = entityManager.getReference(Movie.class, movieId);
+        comment.setMovie(movie);
+        entityManager.persist(comment);
     }
 
     // end::Ponetomany[]
