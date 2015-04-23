@@ -5,18 +5,16 @@ import java.util.List;
 
 import javax.persistence.CascadeType;
 import javax.persistence.Entity;
-import javax.persistence.FetchType;
 import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import javax.persistence.NamedQueries;
 import javax.persistence.NamedQuery;
 import javax.persistence.OneToMany;
 import javax.persistence.OneToOne;
-import javax.persistence.Version;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 
-import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Proxy;
 
 @Entity
 @NamedQueries({
@@ -25,6 +23,7 @@ import org.hibernate.annotations.DynamicUpdate;
                 query="SELECT m FROM Movie m WHERE m.title = :title") //<1>
 })
 // tag::dynamicupdate[]
+@Proxy(lazy=true)
 public class Movie {
 // end::dynamicupdate[]
     @Id @GeneratedValue

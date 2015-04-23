@@ -32,6 +32,7 @@ And if you run this code you will end up by next two queries.
 
 ....
 Hibernate: select movie0_.id as id1_1_2_, movie0_.releasedYear as released2_1_2_, movie0_.title as title3_1_2_, comments1_.movie_id as movie_id3_1_4_, comments1_.id as id1_0_4_, comments1_.id as id1_0_0_, comments1_.movie_id as movie_id3_0_0_, comments1_.review as review2_0_0_, moviedetai2_.id as id1_2_1_, moviedetai2_.directedBy as directed2_2_1_, moviedetai2_.producedBy as produced3_2_1_ from Movie movie0_ left outer join Comment comments1_ on movie0_.id=comments1_.movie_id left outer join MovieDetail moviedetai2_ on movie0_.id=moviedetai2_.id where movie0_.id=?
+
 Hibernate: update Movie set releasedYear=?, title=? where id=?
 ....
 
